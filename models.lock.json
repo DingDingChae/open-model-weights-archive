@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "models": [
+    {
+      "id": "qwen3.6-27b",
+      "ollama": "qwen3.6:27b-bf16",
+      "revision": "c3a702fca756",
+      "measuredBytes": 56000000000,
+      "artifact": "ghcr.io/dingdingchae/open-model-weights-archive/qwen3.6-27b"
+    },
+    {
+      "id": "gemma3-27b",
+      "ollama": "gemma3:27b-it-fp16",
+      "revision": "b7d58e2e179e",
+      "measuredBytes": 55000000000,
+      "artifact": "ghcr.io/dingdingchae/open-model-weights-archive/gemma3-27b"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "info": {
+    "name": "Open Model Weights Archive APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Ollama gateway",
+      "description": "Import docs/api/postman-collection.json for the complete collection."
+    }
+  ]
+}

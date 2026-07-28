@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -98,9 +98,31 @@ async def models(request: Request) -> JSONResponse:
     return JSONResponse(body)
 
 
-async def _stream(response: httpx.Response) -> AsyncIterator[bytes]:
-    async for chunk in response.aiter_bytes():
-        yield chunk
+async def _stream_ollama(
+    request: Request, path: str, payload: dict[str, Any]
+) -> AsyncIterator[bytes]:
+    try:
+        async with httpx.AsyncClient(timeout=None) as client:
+            async with client.stream(
+                request.method,
+                f"{OLLAMA_URL}{path}",
+                json=_map_model(payload),
+                headers={"accept": request.headers.get("accept", "application/json")},
+            ) as response:
+                if not response.is_success:
+                    body = await response.aread()
+                    yield body
+                    return
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+    except httpx.RequestError:
+        error = {
+            "error": {
+                "message": _message("ollama_unavailable", _language(request)),
+                "type": "ollama_unavailable",
+            }
+        }
+        yield json.dumps(error).encode("utf-8")
 
 
 async def _proxy_json(request: Request, path: str) -> JSONResponse | StreamingResponse:
@@ -108,14 +130,27 @@ async def _proxy_json(request: Request, path: str) -> JSONResponse | StreamingRe
         payload = await request.json()
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="Request body must be valid JSON.") from exc
+    mapped = _map_model(payload)
+    if bool(mapped.get("stream")):
+        return StreamingResponse(
+            _stream_ollama(request, path, payload),
+            media_type="text/event-stream"
+            if path.startswith("/v1/")
+            else "application/x-ndjson",
+            headers={"x-ollama-model": str(mapped.get("model", ""))},
+        )
     response = await _request_ollama(request, path, payload)
     content_type = response.headers.get("content-type", "application/json")
-    return JSONResponse(
-        response.json(),
+    headers = {"x-ollama-model": str(mapped.get("model", ""))}
+    if "application/json" in content_type:
+        return JSONResponse(
+            response.json(), status_code=response.status_code, headers=headers
+        )
+    return Response(
+        response.content,
         status_code=response.status_code,
-        headers={"x-ollama-model": str(_map_model(payload).get("model", ""))},
-    ) if "application/json" in content_type else StreamingResponse(
-        _stream(response), status_code=response.status_code, media_type=content_type
+        media_type=content_type,
+        headers=headers,
     )
 
 
